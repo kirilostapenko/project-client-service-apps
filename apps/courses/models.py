@@ -1,6 +1,6 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-
+from django.contrib.auth import get_user_model
 
 class User(AbstractUser):
     class Role(models.TextChoices):
@@ -27,6 +27,8 @@ class Course(models.Model):
 
     class Meta:
         db_table = "courses"
+        
+    cover_image = models.ImageField(upload_to='courses/covers/', blank=True, null=True)
 
 
 class Lesson(models.Model):

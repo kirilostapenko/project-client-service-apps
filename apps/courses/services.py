@@ -49,6 +49,38 @@ class CourseService:
             order=order
         )
 
+    def upload_course_cover(self, course_id: int, image_file) -> Course:
+        course = self.course_repo.get_by_id(course_id)
+        if not course:
+            raise ValueError("Курс не знайдено.")
+
+        if not image_file:
+            raise ValueError("Файл не передано.")
+    
+        max_size_bytes = 5 * 1024 * 1024
+        if image_file.size > max_size_bytes:
+            raise ValueError("Розмір файлу перевищує 5 МБ.")
+        
+        allowed_types = ['image/jpeg', 'image/png']
+        content_type = getattr(image_file, 'content_type', '')
+        if content_type and content_type not in allowed_types:
+            raise ValueError("Дозволені лише формати JPEG або PNG.")
+
+        if course.cover_image:
+            course.cover_image.delete(save=False)
+
+        course.cover_image = image_file
+        course.save()
+        return course
+    
+    def get_course_cover(self, course_id: int):
+        course = self.course_repo.get_by_id(course_id)
+        if not course:
+            raise ValueError("Курс не знайдено.")
+        if not course.cover_image:
+            raise ValueError("У курсу немає обкладинки.")
+        return course.cover_image
+
 class LessonService:
     def __init__(self):
         self.lesson_repo = LessonRepository()

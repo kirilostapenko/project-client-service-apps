@@ -5,6 +5,11 @@ from apps.courses.services import CourseService
 from apps.courses.serializers import CourseSerializer, LessonSerializer
 from .services import QuizService
 from .serializers import QuizSerializer, QuizCreateSerializer
+from rest_framework.parsers import MultiPartParser, FormParser
+from django.http import FileResponse, Http404
+from .services import CourseService
+from drf_spectacular.utils import extend_schema
+from .serializers import CourseCoverSerializer, CourseSerializer, LessonSerializer
 
 class CourseListCreateView(APIView):
     def __init__(self, **kwargs):
@@ -66,6 +71,42 @@ class CourseDetailView(APIView):
             return Response({"detail": "Курс не знайдено"}, status=status.HTTP_404_NOT_FOUND)
         return Response(status=status.HTTP_24_NO_CONTENT)
 
+class CourseCoverView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.service = CourseService()
+
+    def get(self, request, pk):
+        try:
+            image_file = self.service.get_course_cover(pk)
+            return FileResponse(image_file.open('rb'))
+        except ValueError as e:
+            raise Http404(str(e))
+
+    @extend_schema(
+        request={
+            'multipart/form-data': {
+                'type': 'object',
+                'properties': {
+                    'cover_image': {
+                        'type': 'string',
+                        'format': 'binary',
+                    }
+                },
+                'required': ['cover_image'],
+            }
+        }
+    )
+    
+    def post(self, request, pk):
+        file_obj = request.FILES.get('cover_image')
+        try:
+            self.service.upload_course_cover(pk, file_obj)
+            return Response({"detail": "Обкладинку успішно завантажено."}, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class LessonCreateView(APIView):
     def __init__(self, **kwargs):
