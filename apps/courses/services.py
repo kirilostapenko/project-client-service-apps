@@ -3,6 +3,9 @@ from apps.courses.models import Course, Lesson
 from apps.courses.repositories import CourseRepository, LessonRepository
 from .models import Quiz, Lesson
 from .repositories import QuizRepository
+import os
+import requests
+from django.core.cache import cache
 
 class CourseService:
     def __init__(self):
@@ -114,3 +117,41 @@ class QuizService:
         if not title:
             raise ValueError("Назва тесту обов'язкова")
         return self.quiz_repo.create(lesson=lesson, title=title)
+
+class ExternalGeocodingService:
+    BASE_URL = "https://api.geoapify.com/v1/geocode/search"
+
+    @classmethod
+    def geocode(cls, address: str):
+        if not address:
+            return None
+            
+        cache_key = f"geo_{address.strip().lower()}"
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return cached_result
+
+        api_key = os.getenv("GEOCODING_API_KEY", "")
+        if not api_key:
+            return None
+
+        try:
+            response = requests.get(
+                cls.BASE_URL,
+                params={"text": address, "apiKey": api_key, "format": "json"},
+                timeout=5
+            )
+            if response.status_code == 200:
+                data = response.json()
+                results = data.get("results", [])
+                if results:
+                    coords = {"lat": results[0]["lat"], "lon": results[0]["lon"]}
+                    cache.set(cache_key, coords, timeout=3600)
+                    return coords
+                else:
+                    cache.set(cache_key, {}, timeout=600)
+                    return None
+            else:
+                return None
+        except (requests.RequestException, Exception):
+            return None

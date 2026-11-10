@@ -10,6 +10,12 @@ from django.http import FileResponse, Http404
 from .services import CourseService
 from drf_spectacular.utils import extend_schema
 from .serializers import CourseCoverSerializer, CourseSerializer, LessonSerializer
+from .jobs import get_job_status
+from django.db.models import Count
+from rest_framework import generics
+from .models import Course
+from .serializers import CourseSerializer
+from .jobs import create_background_job
 
 class CourseListCreateView(APIView):
     def __init__(self, **kwargs):
@@ -17,7 +23,7 @@ class CourseListCreateView(APIView):
         self.service = CourseService()
 
     def get(self, request):
-        courses = self.service.get_all_courses()
+        courses = Course.objects.annotate(students_count=Count('enrollments')).order_by('created_at', 'id')
         serializer = CourseSerializer(courses, many=True)
         return Response(serializer.data)
 
@@ -26,7 +32,7 @@ class CourseListCreateView(APIView):
         if serializer.is_valid():
             try:
                 teacher = request.user if request.user.is_authenticated else None
-                
+
                 if not teacher:
                     from django.contrib.auth import get_user_model
                     User = get_user_model()
@@ -69,7 +75,7 @@ class CourseDetailView(APIView):
         success = self.service.delete_course(pk)
         if not success:
             return Response({"detail": "Курс не знайдено"}, status=status.HTTP_404_NOT_FOUND)
-        return Response(status=status.HTTP_24_NO_CONTENT)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 class CourseCoverView(APIView):
     parser_classes = [MultiPartParser, FormParser]
@@ -146,3 +152,19 @@ class QuizCreateView(APIView):
             except ValueError as e:
                 return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class JobStatusView(APIView):
+    def get(self, request, job_id):
+        job_status = get_job_status(job_id)
+        if not job_status:
+            return Response({"detail": "Job not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"job_id": job_id, "status": job_status}, status=status.HTTP_200_OK)
+
+class CourseListView(generics.ListAPIView):
+    queryset = Course.objects.annotate(students_count=Count('enrollments')).order_by('created_at', 'id')
+    serializer_class = CourseSerializer
+
+class CreateJobView(APIView):
+    def post(self, request):
+        job_id = create_background_job(request.data)
+        return Response({"job_id": job_id, "status": "pending"}, status=status.HTTP_201_CREATED)

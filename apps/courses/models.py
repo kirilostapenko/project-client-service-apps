@@ -24,11 +24,13 @@ class Course(models.Model):
         related_name="courses_taught",
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    cover_image = models.ImageField(upload_to='courses/covers/', blank=True, null=True)
 
     class Meta:
         db_table = "courses"
-        
-    cover_image = models.ImageField(upload_to='courses/covers/', blank=True, null=True)
+        indexes = [
+            models.Index(fields=['created_at', 'id'], name='ix_course_created_id'),
+        ]
 
 
 class Lesson(models.Model):
