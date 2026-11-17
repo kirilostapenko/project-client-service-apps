@@ -16,9 +16,14 @@ from rest_framework import generics
 from .serializers import CourseSerializer
 from .jobs import create_background_job
 from .models import Lesson, Course, Quiz
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
+from .serializers import UserRegistrationSerializer, UserProfileSerializer, LogoutSerializer
 
 @extend_schema(request=CourseSerializer, responses=CourseSerializer)
 class CourseListCreateView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
     queryset = Course.objects.all()
     serializer_class = CourseSerializer
 
@@ -120,6 +125,7 @@ class CourseCoverView(APIView):
 
 @extend_schema(request=LessonSerializer, responses=LessonSerializer)
 class LessonCreateView(APIView):
+    permission_classes = [IsAuthenticated]
     queryset = Lesson.objects.all()
     serializer_class = LessonSerializer
 
@@ -145,6 +151,7 @@ class LessonCreateView(APIView):
 
 @extend_schema(request=QuizSerializer, responses=QuizSerializer)
 class QuizCreateView(APIView):
+    permission_classes = [IsAuthenticated]
     queryset = Quiz.objects.all()
     serializer_class = QuizSerializer
     def __init__(self, **kwargs):
@@ -179,3 +186,38 @@ class CreateJobView(APIView):
     def post(self, request):
         job_id = create_background_job(request.data)
         return Response({"job_id": job_id, "status": "pending"}, status=status.HTTP_201_CREATED)
+
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(request=UserRegistrationSerializer, responses=UserProfileSerializer)
+    def post(self, request):
+        serializer = UserRegistrationSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            return Response(UserProfileSerializer(user).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class CurrentUserView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses=UserProfileSerializer)
+    def get(self, request):
+        serializer = UserProfileSerializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=LogoutSerializer, responses={204: None})
+    def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        if serializer.is_valid():
+            try:
+                refresh_token = serializer.validated_data['refresh']
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+                return Response(status=status.HTTP_204_NO_CONTENT)
+            except TokenError:
+                return Response({"detail": "Недійсний або прострочений токен."}, status=status.HTTP_401_UNAUTHORIZED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

@@ -30,3 +30,64 @@ class CourseFileIntegrationTests(APITestCase):
 
         response = self.client.post(self.url, {'cover_image': txt_file}, format='multipart')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+class JWTAuthTests(APITestCase):
+    def setUp(self):
+        self.register_url = reverse('auth-register')
+        self.login_url = reverse('auth-login')
+        self.refresh_url = reverse('auth-refresh')
+        self.logout_url = reverse('auth-logout')
+        self.me_url = reverse('auth-me')
+        self.courses_url = reverse('course-list-create')
+
+        self.user_data = {
+            'username': 'student_test',
+            'email': 'student@example.com',
+            'password': 'StrongPassword123'
+        }
+
+    def test_register_and_login_flow(self):
+        reg_response = self.client.post(self.register_url, self.user_data, format='json')
+        self.assertEqual(reg_response.status_code, status.HTTP_201_CREATED)
+
+        login_response = self.client.post(self.login_url, {
+            'username': 'student_test',
+            'password': 'StrongPassword123'
+        }, format='json')
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        self.assertIn('access', login_response.data)
+        self.assertIn('refresh', login_response.data)
+
+    def test_protected_endpoint_without_token_returns_401(self):
+        response = self.client.get(self.me_url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_token_rotation_and_logout(self):
+        self.client.post(self.register_url, self.user_data, format='json')
+        login_res = self.client.post(self.login_url, {
+            'username': 'student_test',
+            'password': 'StrongPassword123'
+        }, format='json')
+
+        access_token = login_res.data['access']
+        refresh_token = login_res.data['refresh']
+
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access_token}')
+        me_res = self.client.get(self.me_url)
+        self.assertEqual(me_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(me_res.data['username'], 'student_test')
+
+        refresh_res = self.client.post(self.refresh_url, {'refresh': refresh_token}, format='json')
+        self.assertEqual(refresh_res.status_code, status.HTTP_200_OK)
+        new_refresh = refresh_res.data['refresh']
+        new_access = refresh_res.data['access']
+
+        old_refresh_res = self.client.post(self.refresh_url, {'refresh': refresh_token}, format='json')
+        self.assertEqual(old_refresh_res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {new_access}')
+        logout_res = self.client.post(self.logout_url, {'refresh': new_refresh}, format='json')
+        self.assertEqual(logout_res.status_code, status.HTTP_204_NO_CONTENT)
+
+        after_logout_refresh = self.client.post(self.refresh_url, {'refresh': new_refresh}, format='json')
+        self.assertEqual(after_logout_refresh.status_code, status.HTTP_401_UNAUTHORIZED)
