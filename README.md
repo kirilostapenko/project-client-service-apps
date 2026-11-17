@@ -64,3 +64,67 @@ curl http://127.0.0.1:8000/health
 
 Очікувана відповідь сервера:
 {"status": "ok", "database": "healthy"}
+
+## Архітектура бази даних (ER-діаграма)
+
+Нижче наведено повну ER-діаграму бази даних платформи, яка охоплює всі 4 етапи розробки:
+
+```mermaid
+erDiagram
+    User ||--o{ Course : "creates / teaches (Stage 1)"
+    User ||--o{ Enrollment : "enrolls (Stage 1)"
+    Course ||--o{ Enrollment : "has (Stage 1)"
+    Course ||--o{ Lesson : "contains (Stage 1)"
+    Lesson ||--o{ Quiz : "has (Stage 2)"
+    Quiz ||--|{ Question : "contains (Stage 2)"
+    User ||--o{ BackgroundJob : "triggers (Stage 4)"
+
+    User {
+        int id PK
+        string username
+        string email
+        string password
+    }
+
+    Course {
+        int id PK
+        string title
+        text description
+        string cover_image "Stage 3: File storage"
+        datetime created_at "Stage 4: Composite Index"
+        int teacher_id FK
+    }
+
+    Enrollment {
+        int id PK
+        datetime enrolled_at
+        int user_id FK
+        int course_id FK
+    }
+
+    Lesson {
+        int id PK
+        string title
+        text content
+        int course_id FK
+    }
+
+    Quiz {
+        int id PK
+        string title
+        int lesson_id FK
+    }
+
+    Question {
+        int id PK
+        text text
+        json options
+        int correct_option
+        int quiz_id FK
+    }
+
+    BackgroundJob {
+        uuid job_id PK "Stage 4: In-memory JOBS_DB"
+        string status "pending | processing | done"
+        json payload
+    }
