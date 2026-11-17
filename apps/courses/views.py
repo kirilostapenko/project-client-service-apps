@@ -13,11 +13,15 @@ from .serializers import CourseCoverSerializer, CourseSerializer, LessonSerializ
 from .jobs import get_job_status
 from django.db.models import Count
 from rest_framework import generics
-from .models import Course
 from .serializers import CourseSerializer
 from .jobs import create_background_job
+from .models import Lesson, Course, Quiz
 
+@extend_schema(request=CourseSerializer, responses=CourseSerializer)
 class CourseListCreateView(APIView):
+    queryset = Course.objects.all()
+    serializer_class = CourseSerializer
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.service = CourseService()
@@ -114,7 +118,11 @@ class CourseCoverView(APIView):
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+@extend_schema(request=LessonSerializer, responses=LessonSerializer)
 class LessonCreateView(APIView):
+    queryset = Lesson.objects.all()
+    serializer_class = LessonSerializer
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.service = CourseService()
@@ -135,7 +143,10 @@ class LessonCreateView(APIView):
                 return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+@extend_schema(request=QuizSerializer, responses=QuizSerializer)
 class QuizCreateView(APIView):
+    queryset = Quiz.objects.all()
+    serializer_class = QuizSerializer
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.service = QuizService()
